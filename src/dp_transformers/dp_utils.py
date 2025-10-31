@@ -9,7 +9,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from transformers import (
     Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
-    DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args, modeling_utils
+    DataCollatorForLanguageModeling, DataCollatorWithPadding, PreTrainedTokenizer, training_args, modeling_utils
 )
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 import opacus
@@ -113,6 +113,21 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
         return batch
 
 
+class DataCollatorForPrivateSequenceClassification(DataCollatorWithPadding):
+    def __init__(self, tokenizer: PreTrainedTokenizer):
+        super().__init__(tokenizer=tokenizer)
+
+    def __call__(self, examples: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        batch = super().__call__(examples)
+
+        if "position_ids" not in batch:
+            input_ids = batch["input_ids"]
+            batch["position_ids"] = torch.arange(
+                input_ids.shape[1], dtype=torch.long, device=input_ids.device
+            ).repeat(input_ids.shape[0], 1)
+        return batch
+
+    
 class GradSampleModule(opacus.GradSampleModule):
     """
     Little wrapper to provide `no_sync` context which is assumed by Huggingface trainer.
